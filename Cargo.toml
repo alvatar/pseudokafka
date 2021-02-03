@@ -1,0 +1,9 @@
+[package]
+name = "pseudokafka"
+version = "0.1.0"
+authors = ["Álvaro Castro Castilla <a@fourthbit.com>"]
+edition = "2018"
+
+[dependencies]
+byteorder = "1.4.2"
+nom = "6.1.0"
