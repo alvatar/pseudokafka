@@ -1,29 +1,36 @@
+use std::io::Write;
 use std::net::TcpListener;
 use std::net::TcpStream;
 use std::thread;
 
 mod de;
-mod ser;
 mod messages;
+mod ser;
 
 pub use crate::de::*;
-pub use crate::ser::*;
 pub use crate::messages::*;
+pub use crate::ser::*;
 
 const KAFKA_HOST: &str = "0.0.0.0:9093";
 
-fn handle_client(stream: TcpStream) {
-    if let Ok(mut req) = de::from_tcp_stream(&stream) {
+fn handle_client(mut stream: TcpStream) {
+    while let Ok(mut req) = de::from_tcp_stream(&stream) {
         if let Ok(req) = req.parse() {
             match req.api_key {
-                ApiKey::ApiVersion => unimplemented!("HERE ------- Serialize Response"),
-                _ => unimplemented!(),
+                ApiKey::ApiVersions => {
+                    let resp = ApiVersionsResponse::new(req.correlation_id);
+                    stream.write(&to_bytes(&resp).unwrap()).unwrap();
+                    println!("ApiVersions Response");
+                }
+                ApiKey::Metadata => {
+                    let resp = ApiVersionsResponse::new(req.correlation_id);
+                    stream.write(&to_bytes(&resp).unwrap()).unwrap();
+                }
+                _ => println!("{:?}", req),
             }
         }
-        println!("request: {:?}", req);
-    } else {
-        println!("error, TODO")
     }
+    {}
 }
 
 fn main() {
