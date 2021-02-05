@@ -15,18 +15,11 @@ const KAFKA_HOST: &str = "0.0.0.0:9093";
 
 fn handle_client(mut stream: TcpStream) {
     while let Ok(mut req) = de::from_tcp_stream(&stream) {
-        if let Ok(req) = req.parse() {
-            match req.api_key {
-                ApiKey::ApiVersions => {
-                    let resp = ApiVersionsResponse::new(req.correlation_id);
-                    stream.write(&to_bytes(&resp).unwrap()).unwrap();
-                    println!("ApiVersions Response");
-                }
-                ApiKey::Metadata => {
-                    let resp = ApiVersionsResponse::new(req.correlation_id);
-                    stream.write(&to_bytes(&resp).unwrap()).unwrap();
-                }
-                _ => println!("{:?}", req),
+        if let Ok((_, header)) = req.parse_header() {
+            if let Some(resp) = response_for(header) {
+                stream.write(resp.to_bytes().unwrap().as_slice()).unwrap();
+            } else {
+                println!("PseudoKafka: Request type not implemented");
             }
         }
     }

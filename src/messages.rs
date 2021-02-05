@@ -1,6 +1,28 @@
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::ToPrimitive;
 
+pub enum Message {
+    Request(Request),
+    Response(Response),
+}
+
+pub enum Request {
+    ApiVersionsRequests(ApiVersionsRequests),
+}
+
+pub enum Response {
+    ApiVersionsResponse(ApiVersionsResponse),
+    MetadataResponse(MetadataResponse),
+}
+
+pub fn response_for(hdr: RequestHeader) -> Option<Response> {
+    match hdr.api_key {
+        ApiKey::ApiVersions => Some(Response::ApiVersionsResponse(ApiVersionsResponse::new(&hdr))),
+        ApiKey::Metadata => Some(Response::MetadataResponse(MetadataResponse::new(&hdr))),
+        _ => None,
+    }
+}
+
 #[derive(Debug, FromPrimitive, ToPrimitive)]
 pub enum ApiKey {
     Produce = 0,
@@ -63,6 +85,10 @@ pub struct RequestHeader<'a> {
     pub client_id: Option<&'a str>,
 }
 
+pub struct ApiVersionsRequests {}
+
+pub struct MetadataRequest {}
+
 // Responses
 
 #[derive(Debug)]
@@ -86,11 +112,24 @@ pub struct ApiVersionsResponse {
     pub throttle_time: i32,
 }
 
+#[derive(Debug)]
+pub struct MetadataResponse {}
+
+//////////////
+
+impl MetadataResponse {
+    pub fn new(_header: &RequestHeader) -> Self {
+        Self {}
+    }
+}
+
 impl ApiVersionsResponse {
     // Create a new ApiVersionsResponse, field values extracted from a Wireshark analysis
-    pub fn new(correlation_id: i32) -> Self {
+    pub fn new(header: &RequestHeader) -> Self {
         Self {
-            header: ResponseHeader { correlation_id },
+            header: ResponseHeader {
+                correlation_id: header.correlation_id,
+            },
             error_code: 0,
             throttle_time: 0,
             api_versions: vec![
