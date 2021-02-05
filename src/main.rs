@@ -14,13 +14,13 @@ pub use crate::ser::*;
 const KAFKA_HOST: &str = "0.0.0.0:9093";
 
 fn handle_client(mut stream: TcpStream) {
-    while let Ok(mut req) = de::from_tcp_stream(&stream) {
-        if let Ok((_, header)) = req.parse_header() {
-            if let Some(resp) = response_for(header) {
+    while let Ok(req) = de::from_tcp_stream(&stream) {
+        match response_for(req) {
+            Some(resp) => {
                 stream.write(resp.to_bytes().unwrap().as_slice()).unwrap();
-            } else {
-                println!("PseudoKafka: Request type not implemented");
             }
+            None => (),
+            // TODO: should loop and quit on error
         }
     }
     {}

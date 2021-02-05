@@ -21,7 +21,7 @@ pub struct RawRequest {
     pub body: Vec<u8>,
 }
 
-pub fn from_tcp_stream(mut stream: impl Read) -> io::Result<RawRequest> {
+pub fn from_tcp_stream(mut stream: impl Read) -> io::Result<RequestMessage> {
     let mut size_buf = [0u8; mem::size_of::<i32>()];
     stream.read_exact(&mut size_buf)?;
     let size = i32::from_be_bytes(size_buf) as usize;
@@ -32,26 +32,45 @@ pub fn from_tcp_stream(mut stream: impl Read) -> io::Result<RawRequest> {
         ));
     }
 
-    let mut body = vec![0u8; size];
-    stream.read_exact(&mut body)?;
+    let mut contents = vec![0u8; size];
+    stream.read_exact(&mut contents)?;
 
-    Ok(RawRequest { size, body })
+    match parse_header(&*contents) {
+        Ok((rest, header)) => match &header.api_key {
+            ApiKey::ApiVersions => Ok(RequestMessage::new_from_bytes(header, rest)),
+            _ => Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Unknown API key: {:?}", header.api_key),
+            )),
+        },
+        Err(e) => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Malformed message: {}", e),
+        )),
+    }
 }
 
-impl RawRequest {
-    pub fn parse_header(&mut self) -> NomResult<&[u8], RequestHeader> {
-        let parser = map_res(
-            tuple((be_i16, be_i16, be_i32)),
-            |(api_key_i16, api_version, correlation_id)| match ApiKey::from_i16(api_key_i16) {
-                Some(api_key) => Ok(RequestHeader {
-                    api_key,
-                    api_version,
-                    correlation_id,
-                    client_id: None,
-                }),
-                None => Err(nom::Err::Error((&self.body[..2], ErrorKind::Digit))),
-            },
-        );
-        context("parse header", parser)(&self.body[..])
+pub fn parse_header(buf: &[u8]) -> NomResult<&[u8], RequestHeader> {
+    let parser = map_res(
+        tuple((be_i16, be_i16, be_i32)),
+        |(api_key_i16, api_version, correlation_id)| match ApiKey::from_i16(api_key_i16) {
+            Some(api_key) => Ok(RequestHeader {
+                api_key,
+                api_version,
+                correlation_id,
+                client_id: None,
+            }),
+            None => Err(nom::Err::Error((&buf[..2], ErrorKind::Digit))),
+        },
+    );
+    context("parse header", parser)(&buf[..])
+}
+
+impl RequestMessage {
+    fn new_from_bytes(header: RequestHeader, bytes: &[u8]) -> Self {
+        Self{
+            header,
+            body: Request::ApiVersionsRequest(ApiVersionsRequest {}),
+        }
     }
 }

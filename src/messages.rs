@@ -6,8 +6,21 @@ pub enum Message {
     Response(Response),
 }
 
+#[derive(Debug)]
+pub struct RequestHeader {
+    pub api_key: ApiKey,
+    pub api_version: i16,
+    pub correlation_id: i32,
+    pub client_id: Option<String>,
+}
+
+pub struct RequestMessage {
+    pub header: RequestHeader,
+    pub body: Request,
+}
+
 pub enum Request {
-    ApiVersionsRequests(ApiVersionsRequests),
+    ApiVersionsRequest(ApiVersionsRequest),
 }
 
 pub enum Response {
@@ -15,10 +28,12 @@ pub enum Response {
     MetadataResponse(MetadataResponse),
 }
 
-pub fn response_for(hdr: RequestHeader) -> Option<Response> {
-    match hdr.api_key {
-        ApiKey::ApiVersions => Some(Response::ApiVersionsResponse(ApiVersionsResponse::new(&hdr))),
-        ApiKey::Metadata => Some(Response::MetadataResponse(MetadataResponse::new(&hdr))),
+pub fn response_for(req: RequestMessage) -> Option<Response> {
+    match req.header.api_key {
+        ApiKey::ApiVersions => Some(Response::ApiVersionsResponse(ApiVersionsResponse::new(
+            &req,
+        ))),
+        ApiKey::Metadata => Some(Response::MetadataResponse(MetadataResponse::new(&req))),
         _ => None,
     }
 }
@@ -77,15 +92,7 @@ pub enum ApiKey {
 
 // Requests
 
-#[derive(Debug)]
-pub struct RequestHeader<'a> {
-    pub api_key: ApiKey,
-    pub api_version: i16,
-    pub correlation_id: i32,
-    pub client_id: Option<&'a str>,
-}
-
-pub struct ApiVersionsRequests {}
+pub struct ApiVersionsRequest {}
 
 pub struct MetadataRequest {}
 
@@ -118,17 +125,17 @@ pub struct MetadataResponse {}
 //////////////
 
 impl MetadataResponse {
-    pub fn new(_header: &RequestHeader) -> Self {
+    pub fn new(_header: &RequestMessage) -> Self {
         Self {}
     }
 }
 
 impl ApiVersionsResponse {
     // Create a new ApiVersionsResponse, field values extracted from a Wireshark analysis
-    pub fn new(header: &RequestHeader) -> Self {
+    pub fn new(req: &RequestMessage) -> Self {
         Self {
             header: ResponseHeader {
-                correlation_id: header.correlation_id,
+                correlation_id: req.header.correlation_id,
             },
             error_code: 0,
             throttle_time: 0,
