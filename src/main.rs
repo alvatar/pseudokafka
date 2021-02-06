@@ -1,7 +1,4 @@
-use std::io::Write;
-use std::net::TcpListener;
-use std::net::TcpStream;
-use std::thread;
+use std::{io::Write, net::TcpListener, net::TcpStream, thread};
 
 mod de;
 mod messages;
@@ -16,14 +13,12 @@ const KAFKA_HOST: &str = "0.0.0.0:9093";
 fn handle_client(mut stream: TcpStream) {
     loop {
         match de::from_stream(&stream) {
-            Ok(req) => {
-                match response_for(&req) {
-                    Some(resp) => {
-                        stream.write(resp.to_bytes().unwrap().as_slice()).unwrap();
-                    }
-                    None => break,
+            Ok(req) => match response_for(&req) {
+                Some(resp) => {
+                    stream.write(resp.to_bytes().unwrap().as_slice()).unwrap();
                 }
-            }
+                None => break,
+            },
             Err(e) => {
                 println!("Error reading message: {}", e.into_inner().unwrap());
                 break;

@@ -1,11 +1,13 @@
-use nom::error::{context, ErrorKind};
-use nom::number::streaming::{be_i16, be_i32};
-use nom::IResult;
-use nom::{do_parse, map_res, named, take, tuple};
+use nom::{
+    do_parse,
+    error::{context, ErrorKind},
+    map_res, named,
+    number::streaming::{be_i16, be_i32},
+    take, tuple, IResult,
+};
 use num_traits::FromPrimitive;
 
-use std::io;
-use std::io::Read;
+use std::io::{self, Read};
 use std::mem;
 
 pub use crate::messages::*;
@@ -53,24 +55,27 @@ pub fn from_stream(mut stream: impl Read) -> io::Result<RequestMessage> {
 pub fn parse_header(buf: &[u8]) -> NomResult<&[u8], RequestHeader> {
     named!(
         client_id,
+        // client_id is a length-prefixed string
         do_parse!(length: be_i16 >> bytes: take!(length) >> (bytes))
     );
-    named!(header<&[u8], RequestHeader>,
-           map_res!(
-               tuple!(be_i16, be_i16, be_i32, client_id),
-               |(api_key_i16, api_version, correlation_id, client_id)| {
-                   match ApiKey::from_i16(api_key_i16)
-                   {
-                       Some(api_key) => Ok(RequestHeader {
-                           api_key,
-                           api_version,
-                           correlation_id,
-                           client_id: Some(std::str::from_utf8(client_id).unwrap().to_string()),
-                       }),
-                       None => Err(nom::Err::Error((api_key_i16, ErrorKind::Digit))),
-                   }
-               }
-           )
+    named!(
+        header<&[u8], RequestHeader>,
+        map_res!(
+            // Parse api_key, api_version, correlation_id, client_id
+            tuple!(be_i16, be_i16, be_i32, client_id),
+            |(api_key_i16, api_version, correlation_id, client_id)| {
+                match ApiKey::from_i16(api_key_i16)
+                {
+                    Some(api_key) => Ok(RequestHeader {
+                        api_key,
+                        api_version,
+                        correlation_id,
+                        client_id: Some(std::str::from_utf8(client_id).unwrap().to_string()),
+                    }),
+                    None => Err(nom::Err::Error((api_key_i16, ErrorKind::Digit))),
+                }
+            }
+        )
     );
     context("parse header", header)(buf)
 }
@@ -90,7 +95,7 @@ impl Deserialize for ApiVersionsRequest {
 }
 
 impl Deserialize for MetadataRequest {
-    fn new_from_bytes(header: RequestHeader, _bytes: &[u8]) -> RequestMessage {
+    fn new_from_bytes(header: RequestHeader, bytes: &[u8]) -> RequestMessage {
         RequestMessage {
             header,
             body: Request::MetadataRequest(MetadataRequest {}),
