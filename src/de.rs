@@ -1,8 +1,7 @@
-use nom::combinator::map_res;
-use nom::error::{context, ErrorKind, VerboseError};
+use nom::error::{context, ErrorKind};
 use nom::number::streaming::{be_i16, be_i32};
-use nom::sequence::tuple;
 use nom::IResult;
+use nom::{do_parse, map_res, named, take, tuple};
 use num_traits::FromPrimitive;
 
 use std::io;
@@ -13,7 +12,7 @@ pub use crate::messages::*;
 
 const MAX_MESSAGE_SIZE: usize = 100_000;
 
-type NomResult<T, U> = IResult<T, U, VerboseError<T>>;
+type NomResult<T, U> = IResult<T, U, nom::error::Error<T>>;
 
 #[derive(Debug)]
 pub struct RawRequest {
@@ -21,14 +20,14 @@ pub struct RawRequest {
     pub body: Vec<u8>,
 }
 
-pub fn from_tcp_stream(mut stream: impl Read) -> io::Result<RequestMessage> {
+pub fn from_stream(mut stream: impl Read) -> io::Result<RequestMessage> {
     let mut size_buf = [0u8; mem::size_of::<i32>()];
     stream.read_exact(&mut size_buf)?;
     let size = i32::from_be_bytes(size_buf) as usize;
     if size > MAX_MESSAGE_SIZE {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            "message too large",
+            "Message too large",
         ));
     }
 
@@ -37,7 +36,8 @@ pub fn from_tcp_stream(mut stream: impl Read) -> io::Result<RequestMessage> {
 
     match parse_header(&*contents) {
         Ok((rest, header)) => match &header.api_key {
-            ApiKey::ApiVersions => Ok(RequestMessage::new_from_bytes(header, rest)),
+            ApiKey::ApiVersions => Ok(ApiVersionsRequest::new_from_bytes(header, rest)),
+            ApiKey::Metadata => Ok(MetadataRequest::new_from_bytes(header, rest)),
             _ => Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("Unknown API key: {:?}", header.api_key),
@@ -51,26 +51,49 @@ pub fn from_tcp_stream(mut stream: impl Read) -> io::Result<RequestMessage> {
 }
 
 pub fn parse_header(buf: &[u8]) -> NomResult<&[u8], RequestHeader> {
-    let parser = map_res(
-        tuple((be_i16, be_i16, be_i32)),
-        |(api_key_i16, api_version, correlation_id)| match ApiKey::from_i16(api_key_i16) {
-            Some(api_key) => Ok(RequestHeader {
-                api_key,
-                api_version,
-                correlation_id,
-                client_id: None,
-            }),
-            None => Err(nom::Err::Error((&buf[..2], ErrorKind::Digit))),
-        },
+    named!(
+        client_id,
+        do_parse!(length: be_i16 >> bytes: take!(length) >> (bytes))
     );
-    context("parse header", parser)(&buf[..])
+    named!(header<&[u8], RequestHeader>,
+           map_res!(
+               tuple!(be_i16, be_i16, be_i32, client_id),
+               |(api_key_i16, api_version, correlation_id, client_id)| {
+                   match ApiKey::from_i16(api_key_i16)
+                   {
+                       Some(api_key) => Ok(RequestHeader {
+                           api_key,
+                           api_version,
+                           correlation_id,
+                           client_id: Some(std::str::from_utf8(client_id).unwrap().to_string()),
+                       }),
+                       None => Err(nom::Err::Error((api_key_i16, ErrorKind::Digit))),
+                   }
+               }
+           )
+    );
+    context("parse header", header)(buf)
 }
 
-impl RequestMessage {
-    fn new_from_bytes(header: RequestHeader, bytes: &[u8]) -> Self {
-        Self{
+trait Deserialize {
+    fn new_from_bytes(header: RequestHeader, bytes: &[u8]) -> RequestMessage;
+}
+
+impl Deserialize for ApiVersionsRequest {
+    fn new_from_bytes(header: RequestHeader, _bytes: &[u8]) -> RequestMessage {
+        // Note: no deserialization is made of the body, since it is unnecessary
+        RequestMessage {
             header,
             body: Request::ApiVersionsRequest(ApiVersionsRequest {}),
+        }
+    }
+}
+
+impl Deserialize for MetadataRequest {
+    fn new_from_bytes(header: RequestHeader, _bytes: &[u8]) -> RequestMessage {
+        RequestMessage {
+            header,
+            body: Request::MetadataRequest(MetadataRequest {}),
         }
     }
 }

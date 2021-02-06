@@ -24,11 +24,11 @@ impl Serialize for ApiVersionsResponse {
     fn to_bytes(&self) -> SerializeResult {
         let mut cursor = Cursor::new(Vec::<u8>::new());
 
-        let header_length = mem::size_of::<i16>() * 3 + mem::size_of::<u8>();
+        let api_version_length = mem::size_of::<i16>() * 3 + mem::size_of::<u8>();
         let self_length = (mem::size_of::<i32>() * 2
             + mem::size_of::<i16>()
             + mem::size_of::<u8>() * 2
-            + self.api_versions.len() * header_length) as i32;
+            + self.api_versions.len() * api_version_length) as i32;
 
         cursor.write_i32::<NetworkEndian>(self_length)?;
         cursor.write_i32::<NetworkEndian>(self.header.correlation_id)?;

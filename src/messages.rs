@@ -14,21 +14,25 @@ pub struct RequestHeader {
     pub client_id: Option<String>,
 }
 
+#[derive(Debug)]
 pub struct RequestMessage {
     pub header: RequestHeader,
     pub body: Request,
 }
 
+#[derive(Debug)]
 pub enum Request {
     ApiVersionsRequest(ApiVersionsRequest),
+    MetadataRequest(MetadataRequest),
 }
 
+#[derive(Debug)]
 pub enum Response {
     ApiVersionsResponse(ApiVersionsResponse),
     MetadataResponse(MetadataResponse),
 }
 
-pub fn response_for(req: RequestMessage) -> Option<Response> {
+pub fn response_for(req: &RequestMessage) -> Option<Response> {
     match req.header.api_key {
         ApiKey::ApiVersions => Some(Response::ApiVersionsResponse(ApiVersionsResponse::new(
             &req,
@@ -92,8 +96,10 @@ pub enum ApiKey {
 
 // Requests
 
+#[derive(Debug)]
 pub struct ApiVersionsRequest {}
 
+#[derive(Debug)]
 pub struct MetadataRequest {}
 
 // Responses
