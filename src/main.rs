@@ -15,7 +15,7 @@ fn handle_client(mut stream: TcpStream) {
         match de::from_stream(&stream) {
             Ok(req) => match response_for(&req) {
                 Some(resp) => {
-                    stream.write(resp.to_bytes().unwrap().as_slice()).unwrap();
+                    stream.write_all(resp.to_bytes().unwrap().as_slice()).unwrap();
                 }
                 None => break,
             },

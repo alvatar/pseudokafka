@@ -33,6 +33,7 @@ pub enum Response {
 }
 
 pub fn response_for(req: &RequestMessage) -> Option<Response> {
+    dbg!(req);
     match req.header.api_key {
         ApiKey::ApiVersions => Some(Response::ApiVersionsResponse(ApiVersionsResponse::new(
             &req,
@@ -100,7 +101,19 @@ pub enum ApiKey {
 pub struct ApiVersionsRequest {}
 
 #[derive(Debug)]
-pub struct MetadataRequest {}
+pub struct MetadataRequest {
+    pub topics: Vec<MetadataTopicField>,
+    pub allow_auto_topic_creation: bool,
+    pub include_cluster_authorized_operations: bool,
+    pub include_topic_authorized_operations: bool,
+}
+#[derive(Debug)]
+pub struct MetadataTopicField {
+    pub name: String,
+}
+
+#[derive(Debug)]
+struct TaggedField {}
 
 // Responses
 
