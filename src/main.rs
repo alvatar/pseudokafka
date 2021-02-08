@@ -1,12 +1,12 @@
 use std::{io::Write, net::TcpListener, net::TcpStream, thread};
 
 mod de;
+mod error;
 mod messages;
 mod ser;
 
-pub use crate::de::*;
-pub use crate::messages::*;
-pub use crate::ser::*;
+use crate::messages::*;
+use crate::ser::*;
 
 const KAFKA_HOST: &str = "0.0.0.0:9093";
 
@@ -15,12 +15,14 @@ fn handle_client(mut stream: TcpStream) {
         match de::from_stream(&stream) {
             Ok(req) => match response_for(&req) {
                 Some(resp) => {
-                    stream.write_all(resp.to_bytes().unwrap().as_slice()).unwrap();
+                    stream
+                        .write_all(resp.to_bytes().unwrap().as_slice())
+                        .unwrap();
                 }
                 None => break,
             },
             Err(e) => {
-                println!("Error reading message: {}", e.into_inner().unwrap());
+                println!("Error reading message: {:?}", e);
                 break;
             }
         }

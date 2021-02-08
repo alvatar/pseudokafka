@@ -1,11 +1,6 @@
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::ToPrimitive;
 
-pub enum Message {
-    Request(Request),
-    Response(Response),
-}
-
 #[derive(Debug)]
 pub struct RequestHeader {
     pub api_key: ApiKey,

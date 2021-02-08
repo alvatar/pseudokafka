@@ -7,10 +7,11 @@ use nom::{
 };
 use num_traits::FromPrimitive;
 
-use std::io::{self, Read};
+use std::io::Read;
 use std::mem;
 
-pub use crate::messages::*;
+use crate::error::*;
+use crate::messages::*;
 
 // TODO: make it configurable replica.fetch.max.bytes
 // Default max size
@@ -18,7 +19,7 @@ const MAX_MESSAGE_SIZE: usize = 1_048_576;
 
 type NomResult<T, U> = IResult<T, U, nom::error::Error<T>>;
 
-type DeserializeResult = io::Result<RequestMessage>;
+type DeserializeResult = Result<RequestMessage, KafkaError>;
 
 #[derive(Debug)]
 pub struct RawRequest {
@@ -34,28 +35,17 @@ pub fn from_stream(mut stream: impl Read) -> DeserializeResult {
     stream.read_exact(&mut size_buf)?;
     let size = i32::from_be_bytes(size_buf) as usize;
     if size > MAX_MESSAGE_SIZE {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "Message too large",
-        ));
+        return Err(KafkaError::MessageTooLargeError);
     }
 
     let mut contents = vec![0u8; size];
     stream.read_exact(&mut contents)?;
 
-    match parse_header(&*contents) {
-        Ok((rest, header)) => match &header.api_key {
-            ApiKey::ApiVersions => Ok(ApiVersionsRequest::new_from_bytes(rest, header)?),
-            ApiKey::Metadata => Ok(MetadataRequest::new_from_bytes(rest, header)?),
-            _ => Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("Unknown API key: {:?}", header.api_key),
-            )),
-        },
-        Err(e) => Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("Malformed message: {}", e),
-        )),
+    let (rest, header) = parse_header(&*contents)?;
+    match &header.api_key {
+        ApiKey::ApiVersions => Ok(ApiVersionsRequest::new_from_bytes(rest, header)?),
+        ApiKey::Metadata => Ok(MetadataRequest::new_from_bytes(rest, header)?),
+        _ => Err(KafkaError::UnknownMessageError(header.api_key)),
     }
 }
 
@@ -158,10 +148,7 @@ impl Deserialize for MetadataRequest {
                     include_topic_authorized_operations: o3 != 0,
                 }),
             }),
-            Err(e) => Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("error parsing message: {:?}", e),
-            )),
+            Err(_) => Err(KafkaError::DeserializeError),
         }
     }
 }
