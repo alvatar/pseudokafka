@@ -1,11 +1,12 @@
 use byteorder::{NetworkEndian, WriteBytesExt};
 
-use std::io::Cursor;
+use std::io::{Cursor};
 use std::mem;
 
 use crate::messages::*;
+use crate::error::*;
 
-type SerializeResult = std::io::Result<Vec<u8>>;
+type SerializeResult = Result<Vec<u8>, KafkaError>;
 
 pub trait Serialize {
     fn to_bytes(&self) -> SerializeResult;
@@ -25,27 +26,27 @@ impl Serialize for ApiVersionsResponse {
         let mut cursor = Cursor::new(Vec::<u8>::new());
 
         let api_version_length = mem::size_of::<i16>() * 3 + mem::size_of::<u8>();
-        let self_length = (mem::size_of::<i32>() * 2
+        let self_length = (mem::size_of::<u32>() * 2
             + mem::size_of::<i16>()
             + mem::size_of::<u8>() * 2
-            + self.api_versions.len() * api_version_length) as i32;
+            + self.api_versions.len() * api_version_length) as u32;
 
-        cursor.write_i32::<NetworkEndian>(self_length)?;
-        cursor.write_i32::<NetworkEndian>(self.header.correlation_id)?;
-        cursor.write_i16::<NetworkEndian>(self.error_code)?;
+        cursor.write_u32::<NetworkEndian>(self_length)?;
+        cursor.write_u32::<NetworkEndian>(self.header.correlation_id)?;
+        cursor.write_u16::<NetworkEndian>(self.error_code)?;
 
         // TODO: This is reverse-engineered, and so I can't be 100% certain about the +1
         // Look into Kafka's source code. Perhaps refers to the throttle_time field placed at the very end.
         cursor.write_u8(self.api_versions.len() as u8 + 1)?;
 
         for version in &self.api_versions {
-            cursor.write_i16::<NetworkEndian>(version.api_key)?;
-            cursor.write_i16::<NetworkEndian>(version.min_version)?;
-            cursor.write_i16::<NetworkEndian>(version.max_version)?;
+            cursor.write_u16::<NetworkEndian>(version.api_key)?;
+            cursor.write_u16::<NetworkEndian>(version.min_version)?;
+            cursor.write_u16::<NetworkEndian>(version.max_version)?;
             cursor.write_u8(0)?;
         }
 
-        cursor.write_i32::<NetworkEndian>(self.throttle_time)?;
+        cursor.write_u32::<NetworkEndian>(self.throttle_time)?;
         // Tagged fields (none)
         cursor.write_u8(0)?;
 
@@ -55,7 +56,19 @@ impl Serialize for ApiVersionsResponse {
 
 impl Serialize for MetadataResponse {
     fn to_bytes(&self) -> SerializeResult {
-        Ok(Vec::<u8>::new()) // TODO
+        let mut cursor = Cursor::new(Vec::<u8>::new());
+
+        let api_version_length = mem::size_of::<u16>() * 3 + mem::size_of::<u8>();
+        let self_length = 1;
+
+
+        cursor.write_u32::<NetworkEndian>(self_length)?;
+        cursor.write_u32::<NetworkEndian>(self.header.correlation_id)?;
+        // Tagged fields (none)
+        cursor.write_u8(0)?;
+        cursor.write_u32::<NetworkEndian>(self.throttle_time)?;
+
+        Ok(cursor.into_inner())
     }
 }
 
@@ -73,12 +86,12 @@ mod tests {
             throttle_time: 0,
             api_versions: vec![
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::Produce).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::Produce).unwrap(),
                     min_version: 0,
                     max_version: 8,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::Fetch).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::Fetch).unwrap(),
                     min_version: 0,
                     max_version: 11,
                 },

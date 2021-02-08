@@ -4,8 +4,8 @@ use num_traits::ToPrimitive;
 #[derive(Debug)]
 pub struct RequestHeader {
     pub api_key: ApiKey,
-    pub api_version: i16,
-    pub correlation_id: i32,
+    pub api_version: u16,
+    pub correlation_id: u32,
     pub client_id: Option<String>,
 }
 
@@ -29,12 +29,14 @@ pub enum Response {
 
 pub fn response_for(req: &RequestMessage) -> Option<Response> {
     dbg!(req);
-    match req.header.api_key {
-        ApiKey::ApiVersions => Some(Response::ApiVersionsResponse(ApiVersionsResponse::new(
+    match &req.body {
+        Request::ApiVersionsRequest(_) => Some(Response::ApiVersionsResponse(ApiVersionsResponse::new(
             &req,
         ))),
-        ApiKey::Metadata => Some(Response::MetadataResponse(MetadataResponse::new(&req))),
-        _ => None,
+        Request::MetadataRequest(MetadataRequest { topics, .. }) => {
+            let topics = topics.iter().map(|t| TopicMetadata::new(t.name.clone())).collect::<Vec<TopicMetadata>>();
+            Some(Response::MetadataResponse(MetadataResponse::new(&req, topics)))
+        }
     }
 }
 
@@ -114,33 +116,105 @@ struct TaggedField {}
 
 #[derive(Debug)]
 pub struct ResponseHeader {
-    // pub length: i32,
-    pub correlation_id: i32,
+    pub correlation_id: u32,
 }
 
 #[derive(Debug)]
 pub struct ApiVersion {
-    pub api_key: i16,
-    pub min_version: i16,
-    pub max_version: i16,
+    pub api_key: u16,
+    pub min_version: u16,
+    pub max_version: u16,
 }
 
 #[derive(Debug)]
 pub struct ApiVersionsResponse {
     pub header: ResponseHeader,
-    pub error_code: i16,
+    pub error_code: u16,
     pub api_versions: Vec<ApiVersion>,
-    pub throttle_time: i32,
+    pub throttle_time: u32,
 }
 
 #[derive(Debug)]
-pub struct MetadataResponse {}
+pub struct BrokerMetadata {
+    pub node_id: u32,
+    pub host: String,
+    pub port: u32,
+}
 
-//////////////
+#[derive(Debug)]
+pub struct PartitionMetadata {
+    pub error: u16,
+    pub partition_id: u32,
+    pub leader_id: u32,
+    pub leader_epoch: u32,
+    pub replicas: Vec<u32>,
+    pub caught_up_replicas: Vec<u32>,
+    pub offline_replicas: Vec<u32>,
+}
+
+#[derive(Debug)]
+pub struct TopicMetadata {
+    pub error: u16,
+    pub topic_name: String,
+    pub is_internal: bool,
+    pub partitions: Vec<PartitionMetadata>,
+}
+
+#[derive(Debug)]
+pub struct MetadataResponse {
+    pub header: ResponseHeader,
+    pub throttle_time: u32,
+    pub brokers: Vec<BrokerMetadata>,
+    pub cluster_id: String,
+    pub controller_id: u32,
+    pub topics: Vec<TopicMetadata>,
+    pub cluster_authorized_operations: u32,
+}
+
+//
+// Constructors
+//
+
+const NODE_ID: u32 = 1;
+
+impl TopicMetadata {
+    pub fn new(name: String) -> Self {
+        Self {
+            error: 0,
+            topic_name: name,
+            is_internal: false,
+            partitions: vec![PartitionMetadata {
+                error: 0,
+                partition_id: 0,
+                leader_id: NODE_ID,
+                leader_epoch: 0,
+                replicas: vec![NODE_ID],
+                caught_up_replicas: vec![NODE_ID],
+                offline_replicas: Vec::<u32>::new(),
+            }],
+        }
+    }
+}
 
 impl MetadataResponse {
-    pub fn new(_header: &RequestMessage) -> Self {
-        Self {}
+    pub fn new(req: &RequestMessage, topics: Vec<TopicMetadata>) -> Self {
+        Self {
+            header: ResponseHeader {
+                correlation_id: req.header.correlation_id,
+            },
+            throttle_time: 0,
+            // We only ever have a broker. That's the whole point of the project.
+            brokers: vec![BrokerMetadata {
+                node_id: NODE_ID,
+                // TODO: customization
+                host: "localhost".to_string(),
+                port: 9093,
+            }],
+            cluster_id: "44HRlMM2zeusZi2PvXBxcA".to_string(),
+            controller_id: 0,
+            topics: topics,
+            cluster_authorized_operations: 0,
+        }
     }
 }
 
@@ -155,242 +229,242 @@ impl ApiVersionsResponse {
             throttle_time: 0,
             api_versions: vec![
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::Produce).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::Produce).unwrap(),
                     min_version: 0,
                     max_version: 8,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::Fetch).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::Fetch).unwrap(),
                     min_version: 0,
                     max_version: 11,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::Offsets).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::Offsets).unwrap(),
                     min_version: 0,
                     max_version: 5,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::Metadata).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::Metadata).unwrap(),
                     min_version: 0,
                     max_version: 9,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::LeaderAndIsr).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::LeaderAndIsr).unwrap(),
                     min_version: 0,
                     max_version: 4,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::StopReplica).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::StopReplica).unwrap(),
                     min_version: 0,
                     max_version: 2,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::UpdateMetadata).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::UpdateMetadata).unwrap(),
                     min_version: 0,
                     max_version: 6,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::ControlledShutdown).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::ControlledShutdown).unwrap(),
                     min_version: 0,
                     max_version: 3,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::OffsetCommit).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::OffsetCommit).unwrap(),
                     min_version: 0,
                     max_version: 8,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::OffsetFetch).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::OffsetFetch).unwrap(),
                     min_version: 0,
                     max_version: 6,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::GroupCoordinator).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::GroupCoordinator).unwrap(),
                     min_version: 0,
                     max_version: 3,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::JoinGroup).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::JoinGroup).unwrap(),
                     min_version: 0,
                     max_version: 6,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::Heartbeat).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::Heartbeat).unwrap(),
                     min_version: 0,
                     max_version: 4,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::LeaveGroup).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::LeaveGroup).unwrap(),
                     min_version: 0,
                     max_version: 4,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::SyncGroup).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::SyncGroup).unwrap(),
                     min_version: 0,
                     max_version: 4,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::DescribeGroups).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::DescribeGroups).unwrap(),
                     min_version: 0,
                     max_version: 5,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::ListGroups).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::ListGroups).unwrap(),
                     min_version: 0,
                     max_version: 3,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::SaslHandshake).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::SaslHandshake).unwrap(),
                     min_version: 0,
                     max_version: 1,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::ApiVersions).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::ApiVersions).unwrap(),
                     min_version: 0,
                     max_version: 3,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::CreateTopics).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::CreateTopics).unwrap(),
                     min_version: 0,
                     max_version: 5,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::DeleteTopics).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::DeleteTopics).unwrap(),
                     min_version: 0,
                     max_version: 4,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::DeleteRecords).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::DeleteRecords).unwrap(),
                     min_version: 0,
                     max_version: 1,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::InitProducerId).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::InitProducerId).unwrap(),
                     min_version: 0,
                     max_version: 2,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::OffsetForLeaderEpoch).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::OffsetForLeaderEpoch).unwrap(),
                     min_version: 0,
                     max_version: 3,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::AddPartitionsToTxn).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::AddPartitionsToTxn).unwrap(),
                     min_version: 0,
                     max_version: 1,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::AddOffsetsToTxn).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::AddOffsetsToTxn).unwrap(),
                     min_version: 0,
                     max_version: 1,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::EndTxn).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::EndTxn).unwrap(),
                     min_version: 0,
                     max_version: 1,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::WriteTxnMarkers).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::WriteTxnMarkers).unwrap(),
                     min_version: 0,
                     max_version: 0,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::TxnOffsetCommit).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::TxnOffsetCommit).unwrap(),
                     min_version: 0,
                     max_version: 2,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::DescribeAcls).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::DescribeAcls).unwrap(),
                     min_version: 0,
                     max_version: 1,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::CreateAcls).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::CreateAcls).unwrap(),
                     min_version: 0,
                     max_version: 1,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::DeleteAcls).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::DeleteAcls).unwrap(),
                     min_version: 0,
                     max_version: 1,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::DescribeConfigs).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::DescribeConfigs).unwrap(),
                     min_version: 0,
                     max_version: 2,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::AlterConfigs).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::AlterConfigs).unwrap(),
                     min_version: 0,
                     max_version: 1,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::AlterReplicaLogDirs).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::AlterReplicaLogDirs).unwrap(),
                     min_version: 0,
                     max_version: 1,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::DescribeLogDirs).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::DescribeLogDirs).unwrap(),
                     min_version: 0,
                     max_version: 1,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::SaslAuthenticate).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::SaslAuthenticate).unwrap(),
                     min_version: 0,
                     max_version: 1,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::CreatePartitions).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::CreatePartitions).unwrap(),
                     min_version: 0,
                     max_version: 1,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::CreateDelegationToken).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::CreateDelegationToken).unwrap(),
                     min_version: 0,
                     max_version: 2,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::RenewDelegationToken).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::RenewDelegationToken).unwrap(),
                     min_version: 0,
                     max_version: 1,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::ExpireDelegationToken).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::ExpireDelegationToken).unwrap(),
                     min_version: 0,
                     max_version: 1,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::DescribeDelegationToken).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::DescribeDelegationToken).unwrap(),
                     min_version: 0,
                     max_version: 1,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::DeleteGroups).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::DeleteGroups).unwrap(),
                     min_version: 0,
                     max_version: 2,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::ElectLeaders).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::ElectLeaders).unwrap(),
                     min_version: 0,
                     max_version: 2,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::IncrementalAlterConfigs).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::IncrementalAlterConfigs).unwrap(),
                     min_version: 0,
                     max_version: 1,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::AlterPartitionReassignments).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::AlterPartitionReassignments).unwrap(),
                     min_version: 0,
                     max_version: 0,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::ListPartitionReassignments).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::ListPartitionReassignments).unwrap(),
                     min_version: 0,
                     max_version: 0,
                 },
                 ApiVersion {
-                    api_key: ToPrimitive::to_i16(&ApiKey::OffsetDelete).unwrap(),
+                    api_key: ToPrimitive::to_u16(&ApiKey::OffsetDelete).unwrap(),
                     min_version: 0,
                     max_version: 0,
                 },

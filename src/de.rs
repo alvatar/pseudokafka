@@ -2,7 +2,7 @@ use nom::{
     count, do_parse,
     error::{context, ErrorKind},
     map_res, named,
-    number::streaming::{be_i16, be_i32, be_u8},
+    number::streaming::{be_u16, be_u32, be_u8},
     take, tuple, IResult,
 };
 use num_traits::FromPrimitive;
@@ -57,19 +57,19 @@ pub fn parse_header(buf: &[u8]) -> NomResult<&[u8], RequestHeader> {
     named!(
         client_id,
         // client_id is a length-prefixed string
-        do_parse!(length: be_i16 >> bytes: take!(length) >> (bytes))
+        do_parse!(length: be_u16 >> bytes: take!(length) >> (bytes))
     );
     named!(
-        fixed_size_fields<(i16, i16, i32, &[u8])>,
+        fixed_size_fields<(u16, u16, u32, &[u8])>,
         // Parse api_key, api_version, correlation_id, client_id
-        tuple!(be_i16, be_i16, be_i32, client_id)
+        tuple!(be_u16, be_u16, be_u32, client_id)
     );
     named!(
         header<&[u8], RequestHeader>,
         map_res!(
             fixed_size_fields,
-            |(api_key_i16, api_version, correlation_id, client_id)| {
-                match ApiKey::from_i16(api_key_i16)
+            |(api_key_u16, api_version, correlation_id, client_id)| {
+                match ApiKey::from_u16(api_key_u16)
                 {
                     Some(api_key) => Ok(RequestHeader {
                         api_key,
@@ -77,7 +77,7 @@ pub fn parse_header(buf: &[u8]) -> NomResult<&[u8], RequestHeader> {
                         correlation_id,
                         client_id: Some(std::str::from_utf8(client_id).unwrap().to_string()),
                     }),
-                    None => Err(nom::Err::Error((api_key_i16, ErrorKind::Digit))),
+                    None => Err(nom::Err::Error((api_key_u16, ErrorKind::Digit))),
                 }
             }
         )
