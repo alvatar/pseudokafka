@@ -8,19 +8,22 @@ mod ser;
 use crate::messages::*;
 use crate::ser::*;
 
-const KAFKA_HOST: &str = "0.0.0.0:9093";
+const KAFKA_HOST: &str = "0.0.0.0:9092";
 
 fn handle_client(mut stream: TcpStream) {
     loop {
         match de::from_stream(&stream) {
-            Ok(req) => match response_for(&req) {
-                Some(resp) => {
-                    stream
-                        .write_all(resp.to_bytes().unwrap().as_slice())
-                        .unwrap();
+            Ok(req) => {
+                dbg!(&req);
+                match response_for(&req) {
+                    Some(resp) => {
+                        stream
+                            .write_all(resp.to_bytes().unwrap().as_slice())
+                            .unwrap();
+                    }
+                    None => break,
                 }
-                None => break,
-            },
+            }
             Err(e) => {
                 println!("Error reading message: {:?}", e);
                 break;

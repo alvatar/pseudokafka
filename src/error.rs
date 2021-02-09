@@ -1,4 +1,4 @@
-use nom::{Err,error};
+use nom::{error, Err};
 
 use crate::messages::ApiKey;
 
@@ -11,13 +11,13 @@ pub enum KafkaError {
 }
 
 impl From<std::io::Error> for KafkaError {
-    fn from (_: std::io::Error) -> Self {
+    fn from(_: std::io::Error) -> Self {
         KafkaError::SerializeError
     }
 }
 
 impl From<Err<error::Error<&[u8]>>> for KafkaError {
-    fn from (_: Err<error::Error<&[u8]>>) -> Self {
+    fn from(_: Err<error::Error<&[u8]>>) -> Self {
         KafkaError::DeserializeError
     }
 }

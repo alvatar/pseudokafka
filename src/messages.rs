@@ -10,12 +10,6 @@ pub struct RequestHeader {
 }
 
 #[derive(Debug)]
-pub struct RequestMessage {
-    pub header: RequestHeader,
-    pub body: Request,
-}
-
-#[derive(Debug)]
 pub enum Request {
     ApiVersionsRequest(ApiVersionsRequest),
     MetadataRequest(MetadataRequest),
@@ -27,15 +21,13 @@ pub enum Response {
     MetadataResponse(MetadataResponse),
 }
 
-pub fn response_for(req: &RequestMessage) -> Option<Response> {
-    dbg!(req);
-    match &req.body {
-        Request::ApiVersionsRequest(_) => Some(Response::ApiVersionsResponse(ApiVersionsResponse::new(
-            &req,
-        ))),
-        Request::MetadataRequest(MetadataRequest { topics, .. }) => {
-            let topics = topics.iter().map(|t| TopicMetadata::new(t.name.clone())).collect::<Vec<TopicMetadata>>();
-            Some(Response::MetadataResponse(MetadataResponse::new(&req, topics)))
+pub fn response_for(req: &Request) -> Option<Response> {
+    match &req {
+        Request::ApiVersionsRequest(req) => Some(Response::ApiVersionsResponse(
+            ApiVersionsResponse::new(&req),
+        )),
+        Request::MetadataRequest(req) => {
+            Some(Response::MetadataResponse(MetadataResponse::new(&req)))
         }
     }
 }
@@ -95,17 +87,20 @@ pub enum ApiKey {
 // Requests
 
 #[derive(Debug)]
-pub struct ApiVersionsRequest {}
+pub struct ApiVersionsRequest {
+    pub header: RequestHeader,
+}
 
 #[derive(Debug)]
 pub struct MetadataRequest {
-    pub topics: Vec<MetadataTopicField>,
+    pub header: RequestHeader,
+    pub topics: Vec<MetadataTopic>,
     pub allow_auto_topic_creation: bool,
     pub include_cluster_authorized_operations: bool,
     pub include_topic_authorized_operations: bool,
 }
 #[derive(Debug)]
-pub struct MetadataTopicField {
+pub struct MetadataTopic {
     pub name: String,
 }
 
@@ -144,7 +139,7 @@ pub struct BrokerMetadata {
 #[derive(Debug)]
 pub struct PartitionMetadata {
     pub error: u16,
-    pub partition_id: u32,
+    pub id: u32,
     pub leader_id: u32,
     pub leader_epoch: u32,
     pub replicas: Vec<u32>,
@@ -155,7 +150,7 @@ pub struct PartitionMetadata {
 #[derive(Debug)]
 pub struct TopicMetadata {
     pub error: u16,
-    pub topic_name: String,
+    pub name: String,
     pub is_internal: bool,
     pub partitions: Vec<PartitionMetadata>,
 }
@@ -175,17 +170,17 @@ pub struct MetadataResponse {
 // Constructors
 //
 
-const NODE_ID: u32 = 1;
+const NODE_ID: u32 = 1003;
 
 impl TopicMetadata {
     pub fn new(name: String) -> Self {
         Self {
             error: 0,
-            topic_name: name,
+            name,
             is_internal: false,
             partitions: vec![PartitionMetadata {
                 error: 0,
-                partition_id: 0,
+                id: 0,
                 leader_id: NODE_ID,
                 leader_epoch: 0,
                 replicas: vec![NODE_ID],
@@ -197,7 +192,13 @@ impl TopicMetadata {
 }
 
 impl MetadataResponse {
-    pub fn new(req: &RequestMessage, topics: Vec<TopicMetadata>) -> Self {
+    pub fn new(req: &MetadataRequest) -> Self {
+        // TODO: value customization
+        let topics = req
+            .topics
+            .iter()
+            .map(|t| TopicMetadata::new(t.name.clone()))
+            .collect::<Vec<_>>();
         Self {
             header: ResponseHeader {
                 correlation_id: req.header.correlation_id,
@@ -206,12 +207,11 @@ impl MetadataResponse {
             // We only ever have a broker. That's the whole point of the project.
             brokers: vec![BrokerMetadata {
                 node_id: NODE_ID,
-                // TODO: customization
                 host: "localhost".to_string(),
-                port: 9093,
+                port: 9092,
             }],
-            cluster_id: "44HRlMM2zeusZi2PvXBxcA".to_string(),
-            controller_id: 0,
+            cluster_id: "0NHLrMQhQe2sWh6PvXAxcA".to_string(),
+            controller_id: NODE_ID,
             topics: topics,
             cluster_authorized_operations: 0,
         }
@@ -220,7 +220,7 @@ impl MetadataResponse {
 
 impl ApiVersionsResponse {
     // Create a new ApiVersionsResponse, field values extracted from a Wireshark analysis
-    pub fn new(req: &RequestMessage) -> Self {
+    pub fn new(req: &ApiVersionsRequest) -> Self {
         Self {
             header: ResponseHeader {
                 correlation_id: req.header.correlation_id,

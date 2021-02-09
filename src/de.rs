@@ -19,7 +19,7 @@ const MAX_MESSAGE_SIZE: usize = 1_048_576;
 
 type NomResult<T, U> = IResult<T, U, nom::error::Error<T>>;
 
-type DeserializeResult = Result<RequestMessage, KafkaError>;
+type DeserializeResult = Result<Request, KafkaError>;
 
 #[derive(Debug)]
 pub struct RawRequest {
@@ -106,27 +106,24 @@ trait Deserialize {
 impl Deserialize for ApiVersionsRequest {
     fn new_from_bytes(_: &[u8], header: RequestHeader) -> DeserializeResult {
         // Note: no deserialization is made of the body, since it is unnecessary
-        Ok(RequestMessage {
-            header,
-            body: Request::ApiVersionsRequest(ApiVersionsRequest {}),
-        })
+        Ok(Request::ApiVersionsRequest(ApiVersionsRequest { header }))
     }
 }
 
 impl Deserialize for MetadataRequest {
     fn new_from_bytes(buf: &[u8], header: RequestHeader) -> DeserializeResult {
         named!(
-            topic<MetadataTopicField>,
+            topic<MetadataTopic>,
             do_parse!(
                 length: be_u8
                     >> bytes: take!(length)
-                    >> (MetadataTopicField {
+                    >> (MetadataTopic {
                         name: std::str::from_utf8(bytes).unwrap().to_string(),
                     })
             )
         );
         named!(
-            topics<Vec<MetadataTopicField>>,
+            topics<Vec<MetadataTopic>>,
             do_parse!(
                 num_topics: be_u8
                     >> topics_ls: count!(topic, (num_topics - 1) as usize)
@@ -135,19 +132,19 @@ impl Deserialize for MetadataRequest {
         );
         named!(options<(u8, u8, u8)>, tuple!(be_u8, be_u8, be_u8));
         named!(
-            metadata<(&[u8], Vec<MetadataTopicField>, (u8, u8, u8), &[u8])>,
+            metadata<(&[u8], Vec<MetadataTopic>, (u8, u8, u8), &[u8])>,
             tuple!(tagged_fields, topics, options, tagged_fields)
         );
         match metadata(buf) {
-            Ok((_, (_, topics, (o1, o2, o3), _))) => Ok(RequestMessage {
-                header,
-                body: Request::MetadataRequest(MetadataRequest {
+            Ok((_, (_, topics, (o1, o2, o3), _))) => {
+                Ok(Request::MetadataRequest(MetadataRequest {
+                    header,
                     topics,
                     allow_auto_topic_creation: o1 != 0,
                     include_cluster_authorized_operations: o2 != 0,
                     include_topic_authorized_operations: o3 != 0,
-                }),
-            }),
+                }))
+            }
             Err(_) => Err(KafkaError::DeserializeError),
         }
     }
