@@ -6,6 +6,58 @@ use std::mem;
 use crate::error::*;
 use crate::messages::*;
 
+macro_rules! encode_with {
+    {
+        $cursor:ident:
+        $($name:expr),*
+    } => {
+        $(
+            $name.encode($cursor)?;
+        )*
+    }
+}
+
+trait SerializeCursor {
+    fn encode(&self, cursor: &mut Cursor<Vec<u8>>) -> std::io::Result<()>;
+}
+
+impl SerializeCursor for u8 {
+    fn encode(&self, cursor: &mut Cursor<Vec<u8>>) -> std::io::Result<()> {
+        cursor.write_u8(*self)
+    }
+}
+
+impl SerializeCursor for u16 {
+    fn encode(&self, cursor: &mut Cursor<Vec<u8>>) -> std::io::Result<()> {
+        cursor.write_u16::<NetworkEndian>(*self)
+    }
+}
+
+impl SerializeCursor for u32 {
+    fn encode(&self, cursor: &mut Cursor<Vec<u8>>) -> std::io::Result<()> {
+        cursor.write_u32::<NetworkEndian>(*self)
+    }
+}
+
+impl SerializeCursor for Vec<ApiVersion> {
+    fn encode(&self, cursor: &mut Cursor<Vec<u8>>) -> std::io::Result<()> {
+        encode_with! { cursor: self.len() as u8 + 1 }
+        for version in self {
+            encode_with! { cursor: version.api_key, version.min_version, version.max_version, 0 as u8 }
+        }
+        Ok(())
+    }
+}
+
+fn write_msg_length(cursor: &mut Cursor<Vec<u8>>) -> std::io::Result<()> {
+    let msg_length = cursor.position();
+    cursor.set_position(0);
+    cursor.write_u32::<NetworkEndian>((msg_length - mem::size_of::<u32>() as u64) as u32)?;
+    Ok(())
+}
+
+// -----------------------------------------------------------------------------
+
 type SerializeResult = Result<Vec<u8>, KafkaError>;
 
 pub trait Serialize {
@@ -23,38 +75,20 @@ impl Serialize for Response {
 
 impl Serialize for ApiVersionsResponse {
     fn to_bytes(&self) -> SerializeResult {
-        let mut cursor = Cursor::new(Vec::<u8>::new());
-
-        /*
-        let api_version_length = mem::size_of::<i16>() * 3 + mem::size_of::<u8>();
-        let msg_length = (mem::size_of::<u32>() * 2
-            + mem::size_of::<i16>()
-            + mem::size_of::<u8>() * 2
-            + self.api_versions.len() * api_version_length) as u32;
-         */
-
-        cursor.write_u32::<NetworkEndian>(0)?;
-        cursor.write_u32::<NetworkEndian>(self.header.correlation_id)?;
-        cursor.write_u16::<NetworkEndian>(self.error_code)?;
-
-        cursor.write_u8(self.api_versions.len() as u8 + 1)?;
-        for version in &self.api_versions {
-            cursor.write_u16::<NetworkEndian>(version.api_key)?;
-            cursor.write_u16::<NetworkEndian>(version.min_version)?;
-            cursor.write_u16::<NetworkEndian>(version.max_version)?;
-            cursor.write_u8(0)?;
+        let cursor = &mut Cursor::new(Vec::<u8>::new());
+        encode_with! {
+            cursor:
+            0 as u32, // Length
+            self.header.correlation_id,
+            self.error_code,
+            &self.api_versions,
+            self.throttle_time,
+            0 as u8 // Tagged fields (none)
         }
-
-        cursor.write_u32::<NetworkEndian>(self.throttle_time)?;
-        // Tagged fields (none)
-        cursor.write_u8(0)?;
-
         // Write length at the beginning
-        let msg_length = cursor.position();
-        cursor.set_position(0);
-        cursor.write_u32::<NetworkEndian>((msg_length - mem::size_of::<u32>() as u64) as u32)?;
+        write_msg_length(cursor)?;
 
-        Ok(cursor.into_inner())
+        Ok(cursor.to_owned().into_inner())
     }
 }
 

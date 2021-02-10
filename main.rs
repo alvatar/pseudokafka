@@ -1,12 +1,5 @@
+use pseudokafka::{ser::Serialize, de, messages};
 use std::{io::Write, net::TcpListener, net::TcpStream, thread};
-
-mod de;
-mod error;
-mod messages;
-mod ser;
-
-use crate::messages::*;
-use crate::ser::*;
 
 const KAFKA_HOST: &str = "0.0.0.0:9092";
 
@@ -15,7 +8,7 @@ fn handle_client(mut stream: TcpStream) {
         match de::from_stream(&stream) {
             Ok(req) => {
                 dbg!(&req);
-                match response_for(&req) {
+                match messages::response_for(&req) {
                     Some(resp) => {
                         stream
                             .write_all(resp.to_bytes().unwrap().as_slice())
@@ -34,7 +27,7 @@ fn handle_client(mut stream: TcpStream) {
 
 fn main() {
     let listener = TcpListener::bind(KAFKA_HOST).unwrap();
-    // accept connections and process them, spawning a new thread for each one
+    // Accept connections and process them, spawning a new thread for each one
     println!("Server listening on {}", KAFKA_HOST);
     for stream in listener.incoming() {
         match stream {

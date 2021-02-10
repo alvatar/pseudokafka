@@ -84,7 +84,9 @@ pub enum ApiKey {
     OffsetDelete = 47,
 }
 
-// Requests
+//
+// Request Types
+//
 
 #[derive(Debug)]
 pub struct ApiVersionsRequest {
@@ -105,9 +107,11 @@ pub struct MetadataTopic {
 }
 
 #[derive(Debug)]
-struct TaggedField {}
+pub struct TaggedField {}
 
-// Responses
+//
+// Response Types
+//
 
 #[derive(Debug)]
 pub struct ResponseHeader {
