@@ -1,4 +1,4 @@
-use pseudokafka::{ser::Serialize, de, messages};
+use pseudokafka::{ser::Serialize, de, broker};
 use std::{io::Write, net::TcpListener, net::TcpStream, thread};
 
 const KAFKA_HOST: &str = "0.0.0.0:9092";
@@ -8,7 +8,7 @@ fn handle_client(mut stream: TcpStream) {
         match de::from_stream(&stream) {
             Ok(req) => {
                 dbg!(&req);
-                match messages::response_for(&req) {
+                match broker::process(&req) {
                     Some(resp) => {
                         stream
                             .write_all(resp.to_bytes().unwrap().as_slice())

@@ -21,17 +21,6 @@ pub enum Response {
     MetadataResponse(MetadataResponse),
 }
 
-pub fn response_for(req: &Request) -> Option<Response> {
-    match &req {
-        Request::ApiVersionsRequest(req) => Some(Response::ApiVersionsResponse(
-            ApiVersionsResponse::new(&req),
-        )),
-        Request::MetadataRequest(req) => {
-            Some(Response::MetadataResponse(MetadataResponse::new(&req)))
-        }
-    }
-}
-
 #[derive(Debug, FromPrimitive, ToPrimitive)]
 pub enum ApiKey {
     Produce = 0,
@@ -85,7 +74,7 @@ pub enum ApiKey {
 }
 
 //
-// Request Types
+// Requests
 //
 
 #[derive(Debug)]
@@ -96,21 +85,17 @@ pub struct ApiVersionsRequest {
 #[derive(Debug)]
 pub struct MetadataRequest {
     pub header: RequestHeader,
-    pub topics: Vec<TopicMetadataRequest>,
+    pub topics: Vec<String>,
     pub allow_auto_topic_creation: bool,
     pub include_cluster_authorized_operations: bool,
     pub include_topic_authorized_operations: bool,
-}
-#[derive(Debug)]
-pub struct TopicMetadataRequest {
-    pub name: String,
 }
 
 #[derive(Debug)]
 pub struct TaggedField {}
 
 //
-// Response Types
+// Responses
 //
 
 #[derive(Debug)]
@@ -203,7 +188,7 @@ impl MetadataResponse {
         let topics = req
             .topics
             .iter()
-            .map(|t| TopicMetadata::new(t.name.clone()))
+            .map(|t| TopicMetadata::new(t.clone()))
             .collect::<Vec<_>>();
         Self {
             header: ResponseHeader {

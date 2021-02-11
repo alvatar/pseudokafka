@@ -186,6 +186,8 @@ impl Serialize for MetadataResponse {
     }
 }
 
+// -----------------------------------------------------------------------------
+
 #[cfg(test)]
 mod tests {
     use num_traits::ToPrimitive;
@@ -246,7 +248,7 @@ mod tests {
                 correlation_id: 1,
                 client_id: None,
             },
-            topics: Vec::<TopicMetadataRequest>::new(),
+            topics: Vec::<String>::new(),
             allow_auto_topic_creation: true,
             include_cluster_authorized_operations: false,
             include_topic_authorized_operations: false,
@@ -267,9 +269,7 @@ mod tests {
                 correlation_id: 3,
                 client_id: None,
             },
-            topics: vec![TopicMetadataRequest {
-                name: "my-topic".to_string(),
-            }],
+            topics: vec!["my-topic".to_string()],
             allow_auto_topic_creation: true,
             include_cluster_authorized_operations: false,
             include_topic_authorized_operations: false,

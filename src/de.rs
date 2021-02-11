@@ -113,17 +113,16 @@ impl Deserialize for ApiVersionsRequest {
 impl Deserialize for MetadataRequest {
     fn new_from_bytes(buf: &[u8], header: RequestHeader) -> DeserializeResult {
         named!(
-            topic<TopicMetadataRequest>,
+            topic<String>,
             do_parse!(
                 length: be_u8
-                    >> bytes: take!(length)
-                    >> (TopicMetadataRequest {
-                        name: std::str::from_utf8(bytes).unwrap().to_string(),
-                    })
+                >> bytes: take!(length-1)
+                >> ignore: take!(1) // it seems Kakfa uses also a null-ending
+                >> (std::str::from_utf8(bytes).unwrap().to_string())
             )
         );
         named!(
-            topics<Vec<TopicMetadataRequest>>,
+            topics<Vec<String>>,
             do_parse!(
                 num_topics: be_u8
                     >> topics_ls: count!(topic, (num_topics - 1) as usize)
@@ -132,7 +131,7 @@ impl Deserialize for MetadataRequest {
         );
         named!(options<(u8, u8, u8)>, tuple!(be_u8, be_u8, be_u8));
         named!(
-            metadata<(&[u8], Vec<TopicMetadataRequest>, (u8, u8, u8), &[u8])>,
+            metadata<(&[u8], Vec<String>, (u8, u8, u8), &[u8])>,
             tuple!(tagged_fields, topics, options, tagged_fields)
         );
         match metadata(buf) {
