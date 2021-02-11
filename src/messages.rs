@@ -96,13 +96,13 @@ pub struct ApiVersionsRequest {
 #[derive(Debug)]
 pub struct MetadataRequest {
     pub header: RequestHeader,
-    pub topics: Vec<MetadataTopic>,
+    pub topics: Vec<TopicMetadataRequest>,
     pub allow_auto_topic_creation: bool,
     pub include_cluster_authorized_operations: bool,
     pub include_topic_authorized_operations: bool,
 }
 #[derive(Debug)]
-pub struct MetadataTopic {
+pub struct TopicMetadataRequest {
     pub name: String,
 }
 
@@ -157,6 +157,7 @@ pub struct TopicMetadata {
     pub name: String,
     pub is_internal: bool,
     pub partitions: Vec<PartitionMetadata>,
+    pub topic_authorized_operations: u32,
 }
 
 #[derive(Debug)]
@@ -191,6 +192,7 @@ impl TopicMetadata {
                 caught_up_replicas: vec![NODE_ID],
                 offline_replicas: Vec::<u32>::new(),
             }],
+            topic_authorized_operations: 0,
         }
     }
 }

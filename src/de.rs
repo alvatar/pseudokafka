@@ -113,17 +113,17 @@ impl Deserialize for ApiVersionsRequest {
 impl Deserialize for MetadataRequest {
     fn new_from_bytes(buf: &[u8], header: RequestHeader) -> DeserializeResult {
         named!(
-            topic<MetadataTopic>,
+            topic<TopicMetadataRequest>,
             do_parse!(
                 length: be_u8
                     >> bytes: take!(length)
-                    >> (MetadataTopic {
+                    >> (TopicMetadataRequest {
                         name: std::str::from_utf8(bytes).unwrap().to_string(),
                     })
             )
         );
         named!(
-            topics<Vec<MetadataTopic>>,
+            topics<Vec<TopicMetadataRequest>>,
             do_parse!(
                 num_topics: be_u8
                     >> topics_ls: count!(topic, (num_topics - 1) as usize)
@@ -132,7 +132,7 @@ impl Deserialize for MetadataRequest {
         );
         named!(options<(u8, u8, u8)>, tuple!(be_u8, be_u8, be_u8));
         named!(
-            metadata<(&[u8], Vec<MetadataTopic>, (u8, u8, u8), &[u8])>,
+            metadata<(&[u8], Vec<TopicMetadataRequest>, (u8, u8, u8), &[u8])>,
             tuple!(tagged_fields, topics, options, tagged_fields)
         );
         match metadata(buf) {

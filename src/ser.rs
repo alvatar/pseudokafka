@@ -21,6 +21,12 @@ trait SerializeCursor {
     fn encode(&self, cursor: &mut Cursor<Vec<u8>>) -> std::io::Result<()>;
 }
 
+impl SerializeCursor for bool {
+    fn encode(&self, cursor: &mut Cursor<Vec<u8>>) -> std::io::Result<()> {
+        cursor.write_u8(*self as u8)
+    }
+}
+
 impl SerializeCursor for u8 {
     fn encode(&self, cursor: &mut Cursor<Vec<u8>>) -> std::io::Result<()> {
         cursor.write_u8(*self)
@@ -94,7 +100,8 @@ impl SerializeCursor for PartitionMetadata {
             self.leader_epoch,
             self.replicas,
             self.caught_up_replicas,
-            self.offline_replicas
+            self.offline_replicas,
+            0u8 // Tagged fields (none)
         }
         Ok(())
     }
@@ -106,8 +113,10 @@ impl SerializeCursor for TopicMetadata {
             cursor:
             self.error,
             self.name,
-            self.is_internal as u8,
-            self.partitions
+            self.is_internal,
+            self.partitions,
+            self.topic_authorized_operations,
+            0u8 // Tagged fields (none)
         }
         Ok(())
     }
@@ -237,7 +246,7 @@ mod tests {
                 correlation_id: 1,
                 client_id: None,
             },
-            topics: Vec::<MetadataTopic>::new(),
+            topics: Vec::<TopicMetadataRequest>::new(),
             allow_auto_topic_creation: true,
             include_cluster_authorized_operations: false,
             include_topic_authorized_operations: false,
@@ -246,6 +255,29 @@ mod tests {
         assert_eq!(
             msg.to_bytes().unwrap(),
             include_bytes!("../res/metadata_no_topics_response.bin")
+        );
+    }
+
+    #[test]
+    fn serialize_metadata_response() {
+        let req = &MetadataRequest {
+            header: RequestHeader {
+                api_key: ApiKey::Produce,
+                api_version: 9,
+                correlation_id: 3,
+                client_id: None,
+            },
+            topics: vec![TopicMetadataRequest {
+                name: "my-topic".to_string(),
+            }],
+            allow_auto_topic_creation: true,
+            include_cluster_authorized_operations: false,
+            include_topic_authorized_operations: false,
+        };
+        let msg = MetadataResponse::new(req);
+        assert_eq!(
+            msg.to_bytes().unwrap(),
+            include_bytes!("../res/metadata_response.bin")
         );
     }
 }
