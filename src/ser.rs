@@ -142,6 +142,7 @@ impl Serialize for Response {
         match self {
             Response::ApiVersionsResponse(msg) => msg.to_bytes(),
             Response::MetadataResponse(msg) => msg.to_bytes(),
+            Response::ProduceResponse(msg) => msg.to_bytes(),
         }
     }
 }
@@ -185,6 +186,15 @@ impl Serialize for MetadataResponse {
         Ok(cursor.to_owned().into_inner())
     }
 }
+
+impl Serialize for ProduceResponse {
+    fn to_bytes(&self) -> SerializeResult {
+        let cursor = &mut Cursor::new(Vec::<u8>::new());
+        // TODO
+        Ok(cursor.to_owned().into_inner())
+    }
+}
+
 
 // -----------------------------------------------------------------------------
 

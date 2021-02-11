@@ -13,12 +13,14 @@ pub struct RequestHeader {
 pub enum Request {
     ApiVersionsRequest(ApiVersionsRequest),
     MetadataRequest(MetadataRequest),
+    ProduceRequest(ProduceRequest),
 }
 
 #[derive(Debug)]
 pub enum Response {
     ApiVersionsResponse(ApiVersionsResponse),
     MetadataResponse(MetadataResponse),
+    ProduceResponse(ProduceResponse),
 }
 
 #[derive(Debug, FromPrimitive, ToPrimitive)]
@@ -92,7 +94,48 @@ pub struct MetadataRequest {
 }
 
 #[derive(Debug)]
-pub struct TaggedField {}
+pub struct ProductRecordRequest {
+    // Ignored fields: record attributeds, timestamp, offset, key, headers
+    // They seem to be null and inherited from batch
+    pub value: Vec<u8>,
+}
+
+#[derive(Debug)]
+pub struct ProductRecordBatchRequest {
+    pub offset: u64,
+    pub leader_epoch: i32,
+    // magic byte and crc32 ignored
+    pub options: u16,
+    pub last_offset_delta: u32,
+    pub first_timestamp: u64,
+    pub last_timestamp: u64,
+    pub producer_id: i64,
+    pub producer_epoch: i16,
+    pub base_sequence: i32,
+    pub size: u32,
+    pub records: Vec<ProductRecordRequest>,
+}
+
+#[derive(Debug)]
+pub struct ProducePartitionRequest {
+    pub id: u32,
+    pub message_set: ProductRecordBatchRequest,
+}
+
+#[derive(Debug)]
+pub struct ProduceTopicRequest {
+    pub name: String,
+    pub partitions: Vec<ProducePartitionRequest>,
+}
+
+#[derive(Debug)]
+pub struct ProduceRequest {
+    pub header: RequestHeader,
+    pub transactional_id: i16, // -1 is no transaction
+    pub required_acks: u16,
+    pub timeout: u32,
+    pub topics: Vec<ProduceTopicRequest>,
+}
 
 //
 // Responses
@@ -156,58 +199,14 @@ pub struct MetadataResponse {
     pub cluster_authorized_operations: u32,
 }
 
+#[derive(Debug)]
+pub struct ProduceResponse {
+    // TODO
+}
+
 //
 // Constructors
 //
-
-const NODE_ID: u32 = 1003;
-
-impl TopicMetadata {
-    pub fn new(name: String) -> Self {
-        Self {
-            error: 0,
-            name,
-            is_internal: false,
-            partitions: vec![PartitionMetadata {
-                error: 0,
-                id: 0,
-                leader_id: NODE_ID,
-                leader_epoch: 0,
-                replicas: vec![NODE_ID],
-                caught_up_replicas: vec![NODE_ID],
-                offline_replicas: Vec::<u32>::new(),
-            }],
-            topic_authorized_operations: 0,
-        }
-    }
-}
-
-impl MetadataResponse {
-    pub fn new(req: &MetadataRequest) -> Self {
-        // TODO: value customization
-        let topics = req
-            .topics
-            .iter()
-            .map(|t| TopicMetadata::new(t.clone()))
-            .collect::<Vec<_>>();
-        Self {
-            header: ResponseHeader {
-                correlation_id: req.header.correlation_id,
-            },
-            throttle_time: 0,
-            // We only ever have a broker. That's the whole point of the project.
-            brokers: vec![BrokerMetadata {
-                node_id: NODE_ID,
-                host: "localhost".to_string(),
-                port: 9092,
-            }],
-            cluster_id: "0NHLrMQhQe2sWh6PvXAxcA".to_string(),
-            controller_id: NODE_ID,
-            topics: topics,
-            cluster_authorized_operations: 0,
-        }
-    }
-}
 
 impl ApiVersionsResponse {
     // Create a new ApiVersionsResponse, field values extracted from a Wireshark analysis
@@ -463,3 +462,60 @@ impl ApiVersionsResponse {
         }
     }
 }
+
+const NODE_ID: u32 = 1003;
+
+impl TopicMetadata {
+    pub fn new(name: String) -> Self {
+        Self {
+            error: 0,
+            name,
+            is_internal: false,
+            partitions: vec![PartitionMetadata {
+                error: 0,
+                id: 0,
+                leader_id: NODE_ID,
+                leader_epoch: 0,
+                replicas: vec![NODE_ID],
+                caught_up_replicas: vec![NODE_ID],
+                offline_replicas: Vec::<u32>::new(),
+            }],
+            topic_authorized_operations: 0,
+        }
+    }
+}
+
+impl MetadataResponse {
+    pub fn new(req: &MetadataRequest) -> Self {
+        // TODO: value customization
+        let topics = req
+            .topics
+            .iter()
+            .map(|t| TopicMetadata::new(t.clone()))
+            .collect::<Vec<_>>();
+        Self {
+            header: ResponseHeader {
+                correlation_id: req.header.correlation_id,
+            },
+            throttle_time: 0,
+            // We only ever have a broker. That's the whole point of the project.
+            brokers: vec![BrokerMetadata {
+                node_id: NODE_ID,
+                host: "localhost".to_string(),
+                port: 9092,
+            }],
+            cluster_id: "0NHLrMQhQe2sWh6PvXAxcA".to_string(),
+            controller_id: NODE_ID,
+            topics: topics,
+            cluster_authorized_operations: 0,
+        }
+    }
+}
+
+impl ProduceResponse {
+    // Create a new ApiVersionsResponse, field values extracted from a Wireshark analysis
+    pub fn new(_req: &ProduceRequest) -> Self {
+        unimplemented!();
+    }
+}
+

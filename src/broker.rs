@@ -8,5 +8,9 @@ pub fn process(req: &Request) -> Option<Response> {
         Request::MetadataRequest(req) => {
             Some(Response::MetadataResponse(MetadataResponse::new(&req)))
         }
+        Request::ProduceRequest(req) => {
+            // TODO: store message production and deliver to subscribers
+            Some(Response::ProduceResponse(ProduceResponse::new(&req)))
+        }
     }
 }

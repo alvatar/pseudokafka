@@ -2,7 +2,7 @@ use nom::{
     count, do_parse,
     error::{context, ErrorKind},
     map_res, named,
-    number::streaming::{be_u16, be_u32, be_u8},
+    number::streaming::{be_i16, be_u16, be_u32, be_u8},
     take, tuple, IResult,
 };
 use num_traits::FromPrimitive;
@@ -45,6 +45,7 @@ pub fn from_stream(mut stream: impl Read) -> DeserializeResult {
     match &header.api_key {
         ApiKey::ApiVersions => Ok(ApiVersionsRequest::new_from_bytes(rest, header)?),
         ApiKey::Metadata => Ok(MetadataRequest::new_from_bytes(rest, header)?),
+        ApiKey::Produce => Ok(ProduceRequest::new_from_bytes(rest, header)?),
         _ => Err(KafkaError::UnknownMessageError(header.api_key)),
     }
 }
@@ -145,6 +146,47 @@ impl Deserialize for MetadataRequest {
                 }))
             }
             Err(_) => Err(KafkaError::DeserializeError),
+        }
+    }
+}
+
+impl Deserialize for ProduceRequest {
+    fn new_from_bytes(buf: &[u8], header: RequestHeader) -> DeserializeResult {
+        named!(
+            produce_header<(i16, u16, u32)>,
+            tuple!(be_i16, be_u16, be_u32)
+        );
+        // named!(
+        //     topics<ProduceTopicRequest>,
+        // );
+        match produce_header(buf) {
+            Ok((_, (tx_id, req_acks, tout))) => Ok(Request::ProduceRequest(ProduceRequest {
+                header,
+                transactional_id: tx_id,
+                required_acks: req_acks,
+                timeout: tout,
+                topics: Vec::<ProduceTopicRequest>::new(),
+            })),
+            Err(_) => Err(KafkaError::DeserializeError),
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deserialize_produce_request() {
+        let bytes = include_bytes!("../res/produce_request.bin");
+        if let Request::ProduceRequest(r) = from_stream(&bytes[..]).unwrap() {
+            dbg!(&r);
+            assert_eq!(r.transactional_id, -1);
+            assert_eq!(r.header.correlation_id, 4);
+            assert_eq!(r.header.client_id.unwrap(), "console-producer".to_string());
+            assert_eq!(r.timeout, 1500);
         }
     }
 }
