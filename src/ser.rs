@@ -39,11 +39,75 @@ impl SerializeCursor for u32 {
     }
 }
 
-impl SerializeCursor for Vec<ApiVersion> {
+impl SerializeCursor for String {
     fn encode(&self, cursor: &mut Cursor<Vec<u8>>) -> std::io::Result<()> {
-        encode_with! { cursor: self.len() as u8 + 1 }
-        for version in self {
-            encode_with! { cursor: version.api_key, version.min_version, version.max_version, 0 as u8 }
+        cursor.write_u8(self.len() as u8 + 1)?;
+        cursor.write(self.as_bytes())?;
+        Ok(())
+    }
+}
+
+impl<T: SerializeCursor> SerializeCursor for Vec<T> {
+    fn encode(&self, cursor: &mut Cursor<Vec<u8>>) -> std::io::Result<()> {
+        cursor.write_u8(self.len() as u8 + 1)?;
+        for e in self {
+            e.encode(cursor)?;
+        }
+        Ok(())
+    }
+}
+
+impl SerializeCursor for ApiVersion {
+    fn encode(&self, cursor: &mut Cursor<Vec<u8>>) -> std::io::Result<()> {
+        encode_with! {
+            cursor:
+            self.api_key,
+            self.min_version,
+            self.max_version,
+            0u8
+        }
+        Ok(())
+    }
+}
+
+impl SerializeCursor for BrokerMetadata {
+    fn encode(&self, cursor: &mut Cursor<Vec<u8>>) -> std::io::Result<()> {
+        encode_with! {
+            cursor:
+            self.node_id,
+            self.host,
+            self.port,
+            0u8, // Rack (none)
+            0u8 // Tagged fields (none)
+        }
+        Ok(())
+    }
+}
+
+impl SerializeCursor for PartitionMetadata {
+    fn encode(&self, cursor: &mut Cursor<Vec<u8>>) -> std::io::Result<()> {
+        encode_with! {
+            cursor:
+            self.error,
+            self.id,
+            self.leader_id,
+            self.leader_epoch,
+            self.replicas,
+            self.caught_up_replicas,
+            self.offline_replicas
+        }
+        Ok(())
+    }
+}
+
+impl SerializeCursor for TopicMetadata {
+    fn encode(&self, cursor: &mut Cursor<Vec<u8>>) -> std::io::Result<()> {
+        encode_with! {
+            cursor:
+            self.error,
+            self.name,
+            self.is_internal as u8,
+            self.partitions
         }
         Ok(())
     }
@@ -78,14 +142,13 @@ impl Serialize for ApiVersionsResponse {
         let cursor = &mut Cursor::new(Vec::<u8>::new());
         encode_with! {
             cursor:
-            0 as u32, // Length
+            0u32, // Length
             self.header.correlation_id,
             self.error_code,
             &self.api_versions,
             self.throttle_time,
-            0 as u8 // Tagged fields (none)
+            0u8 // Tagged fields (none)
         }
-        // Write length at the beginning
         write_msg_length(cursor)?;
 
         Ok(cursor.to_owned().into_inner())
@@ -94,63 +157,23 @@ impl Serialize for ApiVersionsResponse {
 
 impl Serialize for MetadataResponse {
     fn to_bytes(&self) -> SerializeResult {
-        let mut cursor = Cursor::new(Vec::<u8>::new());
-
-        cursor.write_u32::<NetworkEndian>(0)?;
-        cursor.write_u32::<NetworkEndian>(self.header.correlation_id)?;
-        // Tagged fields (none)
-        cursor.write_u8(0)?;
-        cursor.write_u32::<NetworkEndian>(self.throttle_time)?;
-
-        cursor.write_u8(self.brokers.len() as u8 + 1)?;
-        for broker in &self.brokers {
-            cursor.write_u32::<NetworkEndian>(broker.node_id)?;
-            cursor.write_u8(broker.host.len() as u8 + 1)?;
-            cursor.write(broker.host.as_bytes())?;
-            cursor.write_u32::<NetworkEndian>(broker.port)?;
-            // Rack (none)
-            cursor.write_u8(0)?;
-            // Tagged fields (none)
-            cursor.write_u8(0)?;
+        let cursor = &mut Cursor::new(Vec::<u8>::new());
+        encode_with! {
+            cursor:
+            0u32, // Length
+            self.header.correlation_id,
+            0u8, // Tagged fields (none)
+            self.throttle_time,
+            self.brokers,
+            self.cluster_id,
+            self.controller_id,
+            &self.topics,
+            self.cluster_authorized_operations,
+            0u8 // Tagged fields (none)
         }
+        write_msg_length(cursor)?;
 
-        cursor.write_u8(self.cluster_id.len() as u8 + 1)?;
-        cursor.write(self.cluster_id.as_bytes())?;
-        cursor.write_u32::<NetworkEndian>(self.controller_id)?;
-
-        cursor.write_u8(self.topics.len() as u8 + 1)?;
-        for topic in &self.topics {
-            cursor.write_u16::<NetworkEndian>(topic.error)?;
-            cursor.write_u8(topic.name.len() as u8 + 1)?;
-            cursor.write(topic.name.as_bytes())?;
-            cursor.write_u8(topic.is_internal as u8)?;
-            // Partitions
-            cursor.write_u8(topic.partitions.len() as u8 + 1)?;
-            for partition in &topic.partitions {
-                cursor.write_u16::<NetworkEndian>(partition.error)?;
-                cursor.write_u32::<NetworkEndian>(partition.id)?;
-                cursor.write_u32::<NetworkEndian>(partition.leader_id)?;
-                cursor.write_u32::<NetworkEndian>(partition.leader_epoch)?;
-                cursor.write_u8(partition.replicas.len() as u8 + 1)?;
-                for replica in &partition.replicas {
-                    cursor.write_u32::<NetworkEndian>(*replica)?;
-                }
-
-                // Tagged fields (none)
-                cursor.write_u8(0)?;
-            }
-        }
-
-        cursor.write_u32::<NetworkEndian>(self.cluster_authorized_operations)?;
-        // Tagged fields (none)
-        cursor.write_u8(0)?;
-
-        // Write length at the beginning
-        let msg_length = cursor.position();
-        cursor.set_position(0);
-        cursor.write_u32::<NetworkEndian>((msg_length - mem::size_of::<u32>() as u64) as u32)?;
-
-        Ok(cursor.into_inner())
+        Ok(cursor.to_owned().into_inner())
     }
 }
 
