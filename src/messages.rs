@@ -1,7 +1,7 @@
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::ToPrimitive;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct RequestHeader {
     pub api_key: ApiKey,
     pub api_version: u16,
@@ -23,7 +23,7 @@ pub enum Response {
     ProduceResponse(ProduceResponse),
 }
 
-#[derive(Debug, FromPrimitive, ToPrimitive)]
+#[derive(Debug, FromPrimitive, ToPrimitive, PartialEq)]
 pub enum ApiKey {
     Produce = 0,
     Fetch = 1,
@@ -93,15 +93,15 @@ pub struct MetadataRequest {
     pub include_topic_authorized_operations: bool,
 }
 
-#[derive(Debug)]
-pub struct ProductRecordRequest {
+#[derive(Debug, PartialEq)]
+pub struct ProduceRecordRequest {
     // Ignored fields: record attributeds, timestamp, offset, key, headers
     // They seem to be null and inherited from batch
     pub value: Vec<u8>,
 }
 
-#[derive(Debug)]
-pub struct ProductRecordBatchRequest {
+#[derive(Debug, PartialEq)]
+pub struct ProduceRecordBatchRequest {
     pub offset: u64,
     pub leader_epoch: i32,
     // magic byte and crc32 ignored
@@ -112,23 +112,22 @@ pub struct ProductRecordBatchRequest {
     pub producer_id: i64,
     pub producer_epoch: i16,
     pub base_sequence: i32,
-    pub size: u32,
-    pub records: Vec<ProductRecordRequest>,
+    pub records: Vec<ProduceRecordRequest>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct ProducePartitionRequest {
     pub id: u32,
-    pub message_set: ProductRecordBatchRequest,
+    pub message_set: ProduceRecordBatchRequest,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct ProduceTopicRequest {
     pub name: String,
     pub partitions: Vec<ProducePartitionRequest>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct ProduceRequest {
     pub header: RequestHeader,
     pub transactional_id: i16, // -1 is no transaction
@@ -518,4 +517,3 @@ impl ProduceResponse {
         unimplemented!();
     }
 }
-
